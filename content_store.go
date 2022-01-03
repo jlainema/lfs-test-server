@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	errHashMismatch = errors.New("Content hash does not match OID")
-	errSizeMismatch = errors.New("Content size does not match")
+	errHashMismatch = errors.New("content hash does not match OID")
+	errSizeMismatch = errors.New("content size does not match")
 )
 
 // ContentStore provides a simple file system based storage.
@@ -81,6 +81,7 @@ func (s *ContentStore) Put(meta *MetaObject, r io.Reader) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -98,5 +99,5 @@ func transformKey(key string) string {
 		return key
 	}
 
-	return filepath.Join(key[0:2], key[2:4], key[4:len(key)])
+	return filepath.Join(key[0:2], key[2:4], key[4:])
 }

@@ -77,7 +77,7 @@ func (t *TusServer) Start() {
 				logger.Log(kv{"fn": "tuserr", "msg": scanner.Text()})
 			}
 		}()
-		time.Sleep(2)
+		time.Sleep(2000000)
 		procWait.Done()
 		defer p.Wait()
 
@@ -117,11 +117,11 @@ func (t *TusServer) Create(oid string, size int64) (string, error) {
 		return "", err
 	}
 	if res.StatusCode != 201 {
-		return "", fmt.Errorf("Expected tus status code 201, got %d", res.StatusCode)
+		return "", fmt.Errorf("expected tus status code 201, got %d", res.StatusCode)
 	}
 	loc := res.Header.Get("Location")
 	if len(loc) == 0 {
-		return "", fmt.Errorf("Missing Location header in tus response")
+		return "", fmt.Errorf("missing Location header in tus response")
 	}
 	t.oidToTusUrl[oid] = loc
 	return loc, nil
@@ -134,7 +134,7 @@ func (t *TusServer) Finish(oid string, store *ContentStore) error {
 
 	loc, ok := t.oidToTusUrl[oid]
 	if !ok {
-		return fmt.Errorf("Unable to find upload for %s", oid)
+		return fmt.Errorf("unable to find upload for %s", oid)
 	}
 	parts := strings.Split(loc, "/")
 	filename := filepath.Join(t.dataPath, fmt.Sprintf("%s.bin", parts[len(parts)-1]))

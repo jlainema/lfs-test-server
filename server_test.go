@@ -312,7 +312,7 @@ func TestLocksListUnAuthed(t *testing.T) {
 }
 
 func TestLocksVerify(t *testing.T) {
-	buf := bytes.NewBufferString(fmt.Sprintf(`{"cursor": "", "limit": 0}`))
+	buf := bytes.NewBufferString(`{"cursor": "", "limit": 0}`)
 	res, err := api("POST", "/user/repo/locks/verify", metaMediaType, testUser, testPass, buf)
 	if err != nil {
 		t.Fatalf("request error: %s", err)
@@ -334,7 +334,7 @@ func TestLocksVerify(t *testing.T) {
 }
 
 func TestLocksVerifyUnAuthed(t *testing.T) {
-	buf := bytes.NewBufferString(fmt.Sprintf(`{"cursor": "", "limit": 0}`))
+	buf := bytes.NewBufferString(`{"cursor": "", "limit": 0}`)
 	res, err := api("POST", "/user/repo/locks/verify", metaMediaType, "", "", buf)
 	if err != nil {
 		t.Fatalf("request error: %s", err)

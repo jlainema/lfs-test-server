@@ -14,9 +14,11 @@ type Configuration struct {
 	Listen      string `config:"tcp://:8080"`
 	Host        string `config:"localhost:8080"`
 	MetaDB      string `config:"lfs.db"`
+	Size        string `config:"2000000000"` // 2GB decimal as default
 	ContentPath string `config:"lfs-content"`
-	AdminUser   string `config:""`
-	AdminPass   string `config:""`
+	AdminUser   string `config:"root"`
+	AdminPass   string `config:"admin"`
+	ReaderPass  string `config:"reader"`
 	Cert        string `config:""`
 	Key         string `config:""`
 	Scheme      string `config:"http"`

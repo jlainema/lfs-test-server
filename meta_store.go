@@ -21,9 +21,9 @@ type MetaStore struct {
 }
 
 var (
-	errNoBucket       = errors.New("Bucket not found")
-	errObjectNotFound = errors.New("Object not found")
-	errNotOwner       = errors.New("Attempt to delete other user's lock")
+	errNoBucket       = errors.New("bucket not found")
+	errObjectNotFound = errors.New("object not found")
+	errNotOwner       = errors.New("attempt to delete other user's lock")
 )
 
 var (
@@ -236,7 +236,7 @@ func (s *MetaStore) FilteredLocks(repo, path, cursor, limit string) (locks []Loc
 		size, err = strconv.Atoi(limit)
 		if err != nil || size < 0 {
 			locks = make([]Lock, 0)
-			err = fmt.Errorf("Invalid limit amount: %s", limit)
+			err = fmt.Errorf("invalid limit amount: %s", limit)
 			return
 		}
 
@@ -392,6 +392,32 @@ func (s *MetaStore) Objects() ([]*MetaObject, error) {
 	return objects, err
 }
 
+// Storage returns full on-disk size of all objects (estimate)
+func (s *MetaStore) Storage() (int64, error) {
+	var size int64 = 0
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(objectsBucket)
+		if bucket == nil {
+			return errNoBucket
+		}
+
+		bucket.ForEach(func(k, v []byte) error {
+			var meta MetaObject
+			dec := gob.NewDecoder(bytes.NewBuffer(v))
+			err := dec.Decode(&meta)
+			if err != nil {
+				return err
+			}
+			size += FileSize(meta.Size)
+			return nil
+		})
+		return nil
+	})
+
+	return size, err
+}
+
 // AllLocks return all locks in the store, lock path is prepended with repo
 func (s *MetaStore) AllLocks() ([]Lock, error) {
 	var locks []Lock
@@ -419,14 +445,13 @@ func (s *MetaStore) AllLocks() ([]Lock, error) {
 }
 
 // Authenticate authorizes user with password and returns the user name
-func (s *MetaStore) Authenticate(user, password string) (string, bool) {
+func (s *MetaStore) Authenticate(user, password string) (string, int) {
 	// check admin
 	if len(user) > 0 && len(password) > 0 {
-		if ok := checkBasicAuth(user, password, true); ok {
-			return user, true
+		if ok := checkBasicAuth(user, password, true); ok > 0 {
+			return user, ok
 		}
 	}
-
 	value := ""
 
 	s.db.View(func(tx *bolt.Tx) error {
@@ -439,5 +464,8 @@ func (s *MetaStore) Authenticate(user, password string) (string, bool) {
 		return nil
 	})
 
-	return user, value != "" && value == password
+	if value != password {
+		return user, 0
+	}
+	return user, 1
 }

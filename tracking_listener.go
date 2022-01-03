@@ -14,7 +14,7 @@ import (
 type TrackingListener struct {
 	wg          sync.WaitGroup
 	connections map[net.Conn]bool
-	cm          sync.Mutex
+	// cm          sync.Mutex
 	net.Listener
 }
 
@@ -51,7 +51,7 @@ func NewTrackingListener(addr string) (*TrackingListener, error) {
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("Unsupported listener protocol: %s", a.Scheme)
+		return nil, fmt.Errorf("unsupported listener protocol: %s", a.Scheme)
 	}
 
 	return &TrackingListener{Listener: listener, connections: make(map[net.Conn]bool)}, nil

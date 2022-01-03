@@ -5,8 +5,9 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"strings"
 
-	"github.com/GeertJohan/go.rice"
+	rice "github.com/GeertJohan/go.rice"
 	"github.com/gorilla/mux"
 )
 
@@ -25,17 +26,17 @@ type pageData struct {
 }
 
 func (a *App) addMgmt(r *mux.Router) {
-	r.HandleFunc("/mgmt", basicAuth(a.indexHandler)).Methods("GET")
-	r.HandleFunc("/mgmt/objects", basicAuth(a.objectsHandler)).Methods("GET")
-	r.HandleFunc("/mgmt/raw/{oid}", basicAuth(a.objectsRawHandler)).Methods("GET")
-	r.HandleFunc("/mgmt/locks", basicAuth(a.locksHandler)).Methods("GET")
-	r.HandleFunc("/mgmt/users", basicAuth(a.usersHandler)).Methods("GET")
-	r.HandleFunc("/mgmt/add", basicAuth(a.addUserHandler)).Methods("POST")
-	r.HandleFunc("/mgmt/del", basicAuth(a.delUserHandler)).Methods("POST")
+	r.HandleFunc("/dbg", basicAuth(a.indexHandler)).Methods("GET")
+	r.HandleFunc("/dbg/objects", basicAuth(a.objectsHandler)).Methods("GET")
+	r.HandleFunc("/dbg/raw/{oid}", basicAuth(a.objectsRawHandler)).Methods("GET")
+	r.HandleFunc("/dbg/locks", basicAuth(a.locksHandler)).Methods("GET")
+	r.HandleFunc("/dbg/users", basicAuth(a.usersHandler)).Methods("GET")
+	r.HandleFunc("/dbg/add", basicAuth(a.addUserHandler)).Methods("POST")
+	r.HandleFunc("/dbg/del", basicAuth(a.delUserHandler)).Methods("POST")
 
-	cssBox = rice.MustFindBox("mgmt/css")
-	templateBox = rice.MustFindBox("mgmt/templates")
-	r.HandleFunc("/mgmt/css/{file}", basicAuth(cssHandler))
+	cssBox = rice.MustFindBox("dbg/css")
+	templateBox = rice.MustFindBox("dbg/templates")
+	r.HandleFunc("/dbg/css/{file}", basicAuth(cssHandler))
 }
 
 func cssHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,15 +53,20 @@ func cssHandler(w http.ResponseWriter, r *http.Request) {
 	f.Close()
 }
 
-func checkBasicAuth(user string, pass string, ok bool) bool {
+func checkBasicAuth(user string, pass string, ok bool) int {
 	if !ok {
-		return false
+		return 0
 	}
-
-	if user != Config.AdminUser || pass != Config.AdminPass {
-		return false
+	if user != Config.AdminUser {
+		return 0
 	}
-	return true
+	if pass == Config.ReaderPass {
+		return 1
+	}
+	if pass == Config.AdminPass {
+		return 2
+	}
+	return 0
 }
 
 func basicAuth(h http.HandlerFunc) http.HandlerFunc {
@@ -73,7 +79,8 @@ func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 		user, pass, ok := r.BasicAuth()
 
 		ret := checkBasicAuth(user, pass, ok)
-		if !ret {
+
+		if ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "dbg"))) {
 			w.Header().Set("WWW-Authenticate", "Basic realm=mgmt")
 			writeStatus(w, r, 401)
 			return
@@ -163,7 +170,7 @@ func (a *App) addUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/mgmt/users", 302)
+	http.Redirect(w, r, "/mgmt/users", http.StatusFound)
 }
 
 func (a *App) delUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +185,7 @@ func (a *App) delUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/mgmt/users", 302)
+	http.Redirect(w, r, "/mgmt/users", http.StatusFound)
 }
 
 func render(w http.ResponseWriter, tmpl string, data pageData) error {

@@ -105,6 +105,11 @@ type VerifiableLockList struct {
 	Message    string `json:"message,omitempty"`
 }
 
+type SizeResponse struct {
+	Size    int64 `json:"size"`
+	MaxSize int64 `json:"maxSize"`
+}
+
 // DownloadLink builds a URL to download the object.
 func (v *RequestVars) DownloadLink() string {
 	return v.internalLink("objects")
@@ -168,12 +173,26 @@ type App struct {
 	router       *mux.Router
 	contentStore *ContentStore
 	metaStore    *MetaStore
+	currentSize  int64
+	maximumSize  int64
+}
+
+func FileSize(size int64) int64 {
+	return ((size + 4095) & (-1 ^ 4095))
 }
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
 func NewApp(content *ContentStore, meta *MetaStore) *App {
-	app := &App{contentStore: content, metaStore: meta}
+	currentTotal, err := meta.Storage()
+	if err != nil {
+		return nil
+	}
+	msz, err := strconv.ParseInt(Config.Size, 10, 64)
+	if err != nil {
+		return nil
+	}
 
+	app := &App{contentStore: content, metaStore: meta, currentSize: currentTotal, maximumSize: msz}
 	r := mux.NewRouter()
 
 	r.HandleFunc("/{user}/{repo}/objects/batch", app.requireAuth(app.BatchHandler)).Methods("POST").MatcherFunc(MetaMatcher)
@@ -200,12 +219,21 @@ func NewApp(content *ContentStore, meta *MetaStore) *App {
 	r.HandleFunc("/objects", app.requireAuth(app.PostHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 
 	r.HandleFunc("/verify/{oid}", app.VerifyHandler).Methods("POST")
+	r.HandleFunc("/size", app.CurrentSizeHandler).Methods("POST")
 
 	app.addMgmt(r)
 
 	app.router = r
 
 	return app
+}
+
+func (a *App) Append(size int64) bool {
+	if a.maximumSize > 0 && a.currentSize+size > a.maximumSize {
+		return false
+	}
+	a.currentSize += FileSize(size)
+	return true
 }
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +266,7 @@ func (a *App) GetContentHandler(w http.ResponseWriter, r *http.Request) {
 	if rangeHdr := r.Header.Get("Range"); rangeHdr != "" {
 		regex := regexp.MustCompile(`bytes=(\d+)\-.*`)
 		match := regex.FindStringSubmatch(rangeHdr)
-		if match != nil && len(match) > 1 {
+		if len(match) > 1 {
 			statusCode = 206
 			fromByte, _ = strconv.ParseInt(match[1], 10, 64)
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", fromByte, meta.Size-1, int64(meta.Size)-fromByte))
@@ -363,6 +391,13 @@ func (a *App) PutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !a.Append(rv.Size) {
+		a.metaStore.Delete(rv)
+		w.WriteHeader(500)
+		fmt.Fprintf(w, `{"message":"out of space for %d bytes"}`, rv.Size)
+		return
+	}
+
 	if err := a.contentStore.Put(meta, r.Body); err != nil {
 		a.metaStore.Delete(rv)
 		w.WriteHeader(500)
@@ -381,6 +416,17 @@ func (a *App) VerifyHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Fatal(kv{"fn": "VerifyHandler", "err": fmt.Sprintf("Failed to verify %s: %v", oid, err)})
 	}
+
+	logRequest(r, 200)
+}
+
+func (a *App) CurrentSizeHandler(w http.ResponseWriter, r *http.Request) {
+	enc := json.NewEncoder(w)
+	w.WriteHeader(http.StatusOK)
+	enc.Encode(&SizeResponse{
+		Size:    a.currentSize,
+		MaxSize: a.maximumSize,
+	})
 
 	logRequest(r, 200)
 }
@@ -589,7 +635,7 @@ func (a *App) requireAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !Config.IsPublic() {
 			user, password, _ := r.BasicAuth()
-			if user, ret := a.metaStore.Authenticate(user, password); !ret {
+			if user, ret := a.metaStore.Authenticate(user, password); ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "dbg"))) {
 				w.Header().Set("WWW-Authenticate", "Basic realm=git-lfs-server")
 				writeStatus(w, r, 401)
 				return
