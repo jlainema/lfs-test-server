@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>LFS Test Server Management</title>
+    <title>LFS Server Management</title>
     <style type="text/css">
-      @import "/mgmt/css/primer.css";
+      @import "/dbg/css/primer.css";
       .masthead{
         padding-top:1rem;
         padding-bottom:1rem;
@@ -20,7 +20,7 @@
   <body>
     <header class="masthead">
     <div class="container">
-      <h1>LFS Test Server</h1>
+      <h1>LFS Server</h1>
     </div>
     </header>
 
@@ -28,10 +28,10 @@
       <div class="columns">
         <div class="one-fourth column">
           <nav class="menu">
-            <a class="menu-item {{if eq .Name "index"}}selected{{end}}" href="/mgmt">LFS Server</a>
-            <a class="menu-item {{if eq .Name "users"}}selected{{end}}" href="/mgmt/users">Users</a>
-            <a class="menu-item {{if eq .Name "objects"}}selected{{end}}" href="/mgmt/objects">Objects</a>
-            <a class="menu-item {{if eq .Name "locks"}}selected{{end}}" href="/mgmt/locks">Locks</a>
+            <a class="menu-item {{if eq .Name "index"}}selected{{end}}" href="/dbg">LFS Server</a>
+            <a class="menu-item {{if eq .Name "users"}}selected{{end}}" href="/dbg/users">Users</a>
+            <a class="menu-item {{if eq .Name "objects"}}selected{{end}}" href="/dbg/objects">Objects</a>
+            <a class="menu-item {{if eq .Name "locks"}}selected{{end}}" href="/dbg/locks">Locks</a>
           </nav>
         </div>
         <div class="three-fourths column">
