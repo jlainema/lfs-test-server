@@ -60,7 +60,7 @@ func checkBasicAuth(user string, pass string, ok bool) int {
 	if !ok {
 		return 0
 	}
-	if user != Config.AdminUser {
+	if user != Config.Server {
 		return 0
 	}
 	if pass == Config.ReaderPass {
@@ -74,7 +74,7 @@ func checkBasicAuth(user string, pass string, ok bool) int {
 
 func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if Config.AdminUser == "" || Config.AdminPass == "" {
+		if Config.Server == "" || Config.AdminPass == "" {
 			writeStatus(w, r, 404)
 			return
 		}
@@ -83,7 +83,7 @@ func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 
 		ret := checkBasicAuth(user, pass, ok)
 
-		if ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "dbg"))) {
+		if ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "/dbg"))) {
 			w.Header().Set("WWW-Authenticate", "Basic realm=dbg")
 			writeStatus(w, r, 401)
 			return

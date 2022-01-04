@@ -16,7 +16,7 @@ type Configuration struct {
 	MetaDB      string `config:"lfs.db"`
 	Size        string `config:"2000000000"` // 2GB decimal as default
 	ContentPath string `config:"lfs-content"`
-	AdminUser   string `config:"root"`
+	Server      string `config:"root"`
 	AdminPass   string `config:"admin"`
 	ReaderPass  string `config:"reader"`
 	Cert        string `config:""`

@@ -6,7 +6,7 @@
     </tr>
     {{range .Objects}}
       <tr>
-        <td><a target="_blank" href="/{user}/dbg/raw/{{.Oid}}">{{.Oid}}</a></td>
+        <td><a target="_blank" href="/{{.Config.Server}}/dbg/raw/{{.Oid}}">{{.Oid}}</a></td>
         <td>{{.Size}}</td>
       </tr>
     {{end}}
