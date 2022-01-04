@@ -173,6 +173,7 @@ type App struct {
 	maximumSize  int64
 }
 
+// Round to block size, as filesystem is likely not packed; TODO: Detect block size
 func FileSize(size int64) int64 {
 	return ((size + 4095) & (-1 ^ 4095))
 }
@@ -207,8 +208,8 @@ func NewApp(content *ContentStore, meta *MetaStore) *App {
 	r.HandleFunc(route+"/{id}/unlock", app.requireAuth(app.DeleteLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 
 	route = "/{user}/"
-	r.HandleFunc(route+"verify/{oid}", app.VerifyHandler).Methods("POST")
-	r.HandleFunc(route+"size", app.CurrentSizeHandler).Methods("POST")
+	r.HandleFunc(route+"verify/{oid}", app.requireAuth(app.VerifyHandler)).Methods("POST")
+	r.HandleFunc(route+"size", app.requireAuth(app.CurrentSizeHandler)).Methods("POST")
 
 	app.addMgmt(r)
 
