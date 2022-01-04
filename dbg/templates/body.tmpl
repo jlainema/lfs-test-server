@@ -3,7 +3,7 @@
   <head>
     <title>LFS Server Management</title>
     <style type="text/css">
-      @import "/dbg/css/primer.css";
+      @import "/{user}/dbg/css/primer.css";
       .masthead{
         padding-top:1rem;
         padding-bottom:1rem;
@@ -28,10 +28,10 @@
       <div class="columns">
         <div class="one-fourth column">
           <nav class="menu">
-            <a class="menu-item {{if eq .Name "index"}}selected{{end}}" href="/dbg">LFS Server</a>
-            <a class="menu-item {{if eq .Name "users"}}selected{{end}}" href="/dbg/users">Users</a>
-            <a class="menu-item {{if eq .Name "objects"}}selected{{end}}" href="/dbg/objects">Objects</a>
-            <a class="menu-item {{if eq .Name "locks"}}selected{{end}}" href="/dbg/locks">Locks</a>
+            <a class="menu-item {{if eq .Name "index"}}selected{{end}}" href="/{user}/dbg">LFS Server</a>
+            <a class="menu-item {{if eq .Name "users"}}selected{{end}}" href="/{user}/dbg/users">Users</a>
+            <a class="menu-item {{if eq .Name "objects"}}selected{{end}}" href="/{user}/dbg/objects">Objects</a>
+            <a class="menu-item {{if eq .Name "locks"}}selected{{end}}" href="/{user}/dbg/locks">Locks</a>
           </nav>
         </div>
         <div class="three-fourths column">

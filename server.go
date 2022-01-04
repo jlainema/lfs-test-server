@@ -136,11 +136,7 @@ func (v *RequestVars) internalLink(subpath string) string {
 
 	path += fmt.Sprintf("/%s/%s", subpath, v.Oid)
 
-	if Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
-	}
-
-	return fmt.Sprintf("http://%s%s", Config.Host, path)
+	return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
 }
 
 func (v *RequestVars) tusLink() string {
@@ -152,13 +148,13 @@ func (v *RequestVars) tusLink() string {
 }
 
 func (v *RequestVars) VerifyLink() string {
-	path := fmt.Sprintf("/verify/%s", v.Oid)
-
-	if Config.IsHTTPS() {
-		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
+	path := ""
+	if len(v.User) > 0 {
+		path += fmt.Sprintf("/%s", v.User)
 	}
+	path += fmt.Sprintf("/verify/%s", v.Oid)
 
-	return fmt.Sprintf("http://%s%s", Config.Host, path)
+	return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
 }
 
 // link provides a structure used to build a hypermedia representation of an HTTP link.
@@ -195,31 +191,24 @@ func NewApp(content *ContentStore, meta *MetaStore) *App {
 	app := &App{contentStore: content, metaStore: meta, currentSize: currentTotal, maximumSize: msz}
 	r := mux.NewRouter()
 
-	r.HandleFunc("/{user}/{repo}/objects/batch", app.requireAuth(app.BatchHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-
-	route := "/{user}/{repo}/objects/{oid}"
+	ur := "/{user}/{repo}/"
+	r.HandleFunc(ur+"objects/batch", app.requireAuth(app.BatchHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	route := ur + "objects/{oid}"
 	r.HandleFunc(route, app.requireAuth(app.GetContentHandler)).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
 	r.HandleFunc(route, app.requireAuth(app.GetMetaHandler)).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
 	r.HandleFunc(route, app.requireAuth(app.PutHandler)).Methods("PUT").MatcherFunc(ContentMatcher)
 
-	r.HandleFunc("/{user}/{repo}/objects", app.requireAuth(app.PostHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	r.HandleFunc(ur+"objects", app.requireAuth(app.PostHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 
-	r.HandleFunc("/{user}/{repo}/locks", app.requireAuth(app.LocksHandler)).Methods("GET").MatcherFunc(MetaMatcher)
-	r.HandleFunc("/{user}/{repo}/locks/verify", app.requireAuth(app.LocksVerifyHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-	r.HandleFunc("/{user}/{repo}/locks", app.requireAuth(app.CreateLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-	r.HandleFunc("/{user}/{repo}/locks/{id}/unlock", app.requireAuth(app.DeleteLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	route = ur + "locks"
+	r.HandleFunc(route, app.requireAuth(app.LocksHandler)).Methods("GET").MatcherFunc(MetaMatcher)
+	r.HandleFunc(route, app.requireAuth(app.CreateLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	r.HandleFunc(route+"/verify", app.requireAuth(app.LocksVerifyHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	r.HandleFunc(route+"/{id}/unlock", app.requireAuth(app.DeleteLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 
-	r.HandleFunc("/objects/batch", app.requireAuth(app.BatchHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-
-	route = "/objects/{oid}"
-	r.HandleFunc(route, app.requireAuth(app.GetContentHandler)).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
-	r.HandleFunc(route, app.requireAuth(app.GetMetaHandler)).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
-	r.HandleFunc(route, app.requireAuth(app.PutHandler)).Methods("PUT").MatcherFunc(ContentMatcher)
-
-	r.HandleFunc("/objects", app.requireAuth(app.PostHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-
-	r.HandleFunc("/verify/{oid}", app.VerifyHandler).Methods("POST")
-	r.HandleFunc("/size", app.CurrentSizeHandler).Methods("POST")
+	route = "/{user}/"
+	r.HandleFunc(route+"verify/{oid}", app.VerifyHandler).Methods("POST")
+	r.HandleFunc(route+"size", app.CurrentSizeHandler).Methods("POST")
 
 	app.addMgmt(r)
 
@@ -636,7 +625,7 @@ func (a *App) requireAuth(h http.HandlerFunc) http.HandlerFunc {
 		if !Config.IsPublic() {
 			user, password, _ := r.BasicAuth()
 			if user, ret := a.metaStore.Authenticate(user, password); ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "dbg"))) {
-				w.Header().Set("WWW-Authenticate", "Basic realm=git-lfs-server")
+				w.Header().Set("WWW-Authenticate", "Basic realm=lfs")
 				writeStatus(w, r, 401)
 				return
 			} else {

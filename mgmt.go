@@ -26,17 +26,18 @@ type pageData struct {
 }
 
 func (a *App) addMgmt(r *mux.Router) {
-	r.HandleFunc("/dbg", basicAuth(a.indexHandler)).Methods("GET")
-	r.HandleFunc("/dbg/objects", basicAuth(a.objectsHandler)).Methods("GET")
-	r.HandleFunc("/dbg/raw/{oid}", basicAuth(a.objectsRawHandler)).Methods("GET")
-	r.HandleFunc("/dbg/locks", basicAuth(a.locksHandler)).Methods("GET")
-	r.HandleFunc("/dbg/users", basicAuth(a.usersHandler)).Methods("GET")
-	r.HandleFunc("/dbg/add", basicAuth(a.addUserHandler)).Methods("POST")
-	r.HandleFunc("/dbg/del", basicAuth(a.delUserHandler)).Methods("POST")
+	route := "/{user}/dbg"
+	r.HandleFunc(route, basicAuth(a.indexHandler)).Methods("GET")
+	r.HandleFunc(route+"/objects", basicAuth(a.objectsHandler)).Methods("GET")
+	r.HandleFunc(route+"/raw/{oid}", basicAuth(a.objectsRawHandler)).Methods("GET")
+	r.HandleFunc(route+"/locks", basicAuth(a.locksHandler)).Methods("GET")
+	r.HandleFunc(route+"/users", basicAuth(a.usersHandler)).Methods("GET")
+	r.HandleFunc(route+"/add", basicAuth(a.addUserHandler)).Methods("POST")
+	r.HandleFunc(route+"/del", basicAuth(a.delUserHandler)).Methods("POST")
 
 	cssBox = rice.MustFindBox("dbg/css")
 	templateBox = rice.MustFindBox("dbg/templates")
-	r.HandleFunc("/dbg/css/{file}", basicAuth(cssHandler))
+	r.HandleFunc(route+"/css/{file}", basicAuth(cssHandler))
 }
 
 func cssHandler(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +55,8 @@ func cssHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func checkBasicAuth(user string, pass string, ok bool) int {
+	logger.Log(kv{"pass": pass, "user": user, "ok": ok})
+
 	if !ok {
 		return 0
 	}
@@ -81,7 +84,7 @@ func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 		ret := checkBasicAuth(user, pass, ok)
 
 		if ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "dbg"))) {
-			w.Header().Set("WWW-Authenticate", "Basic realm=mgmt")
+			w.Header().Set("WWW-Authenticate", "Basic realm=dbg")
 			writeStatus(w, r, 401)
 			return
 		}
