@@ -447,8 +447,8 @@ func (s *MetaStore) AllLocks() ([]Lock, error) {
 // Authenticate authorizes user with password and returns the user name
 func (s *MetaStore) Authenticate(user, password string) (string, int) {
 	// check admin
-	if len(user) > 0 && len(password) > 0 {
-		if ok := checkBasicAuth(user, password, true); ok > 0 {
+	if server, ok := Config[user]; ok {
+		if ok := server.checkBasicAuth(password, true); ok > 0 {
 			return user, ok
 		}
 	}

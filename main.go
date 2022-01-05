@@ -3,11 +3,13 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
+	"regexp"
 	"time"
+
+	"github.com/radovskyb/watcher"
 )
 
 const (
@@ -65,54 +67,64 @@ func main() {
 		os.Exit(0)
 	}
 
-	var listener net.Listener
+	// startup all servers from data
+	files, err := ioutil.ReadDir("data")
 
-	tl, err := NewTrackingListener(Config.Listen)
 	if err != nil {
-		logger.Fatal(kv{"fn": "main", "err": "Could not create listener: " + err.Error()})
+		logger.Fatal(kv{"err": err})
 	}
 
-	listener = tl
-
-	if Config.IsHTTPS() {
-		logger.Log(kv{"fn": "main", "msg": "Using https"})
-		listener, err = wrapHttps(tl, Config.Cert, Config.Key)
-		if err != nil {
-			logger.Fatal(kv{"fn": "main", "err": "Could not create https listener: " + err.Error()})
+	for _, f := range files {
+		if f.IsDir() {
+			logger.Log(kv{"dir": f.Name()})
+			go newserver(f.Name())
 		}
 	}
 
-	metaStore, err := NewMetaStore(Config.MetaDB)
-	if err != nil {
-		logger.Fatal(kv{"fn": "main", "err": "Could not open the meta store: " + err.Error()})
-	}
+	// and watch the data folder for new servers, and (try) start them once they appear
 
-	contentStore, err := NewContentStore(Config.ContentPath)
-	if err != nil {
-		logger.Fatal(kv{"fn": "main", "err": "Could not open the content store: " + err.Error()})
-	}
+	w := watcher.New()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
-	go func(c chan os.Signal, listener net.Listener) {
+	// SetMaxEvents to 1 to allow at most 1 event's to be received
+	// on the Event channel per watching cycle.
+	//
+	// If SetMaxEvents is not set, the default is to send all events.
+	w.SetMaxEvents(1)
+
+	// Only notify rename and move events.
+	w.FilterOps(watcher.Rename, watcher.Move)
+
+	// Only files that match the regular expression during file listings
+	// will be watched.
+	r := regexp.MustCompile("^[a-z_0-9]+$")
+	w.AddFilterHook(watcher.RegexFilterHook(r, false))
+
+	go func() {
 		for {
-			sig := <-c
-			switch sig {
-			case syscall.SIGHUP: // Graceful shutdown
-				tl.Close()
+			select {
+			case event := <-w.Event:
+				logger.Log(kv{"event": event})
+			case err := <-w.Error:
+				logger.Fatal(kv{"fatal": err})
+			case <-w.Closed:
+				return
 			}
 		}
-	}(c, tl)
+	}()
 
-	logger.Log(kv{"fn": "main", "msg": "listening", "pid": os.Getpid(), "addr": Config.Listen, "version": version})
+	if err := w.Add("data"); err != nil {
+		logger.Fatal(kv{"err": err})
+	}
 
-	app := NewApp(contentStore, metaStore)
-	if Config.IsUsingTus() {
-		tusServer.Start()
+	// Print a list of all of the files and folders currently
+	// being watched and their paths.
+	// for path, f := range w.WatchedFiles() {
+	//	fmt.Printf("%s: %s\n", path, f.Name())
+	// }
+
+	// Start the watching process - it'll check for changes every 100ms.
+	if err := w.Start(time.Millisecond * 100); err != nil {
+		logger.Fatal(kv{"err": err})
 	}
-	app.Serve(listener)
-	tl.WaitForChildren()
-	if Config.IsUsingTus() {
-		tusServer.Stop()
-	}
+
 }

@@ -26,7 +26,7 @@ var (
 )
 
 // Start launches the tus server & stores uploads in the given contentPath
-func (t *TusServer) Start() {
+func (t *TusServer) Start(server string) {
 	t.serverMutex.Lock()
 	defer t.serverMutex.Unlock()
 
@@ -35,7 +35,7 @@ func (t *TusServer) Start() {
 	}
 
 	t.dataPath = filepath.Join(os.TempDir(), "lfs_tusserver")
-	hostparts := strings.Split(Config.TusHost, ":")
+	hostparts := strings.Split(Config[server].TusHost, ":")
 	host := "localhost"
 	port := "1080"
 	if len(hostparts) > 0 {

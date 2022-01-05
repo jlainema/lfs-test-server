@@ -126,17 +126,18 @@ func (v *RequestVars) UploadLink(useTus bool) string {
 func (v *RequestVars) internalLink(subpath string) string {
 	path := ""
 
-	if len(v.User) > 0 {
+	if server, ok := Config[v.User]; ok {
 		path += fmt.Sprintf("/%s", v.User)
+
+		if len(v.Repo) > 0 {
+			path += fmt.Sprintf("/%s", v.Repo)
+		}
+
+		path += fmt.Sprintf("/%s/%s", subpath, v.Oid)
+
+		path = fmt.Sprintf("%s://%s%s", server.Scheme, server.Host, path)
 	}
-
-	if len(v.Repo) > 0 {
-		path += fmt.Sprintf("/%s", v.Repo)
-	}
-
-	path += fmt.Sprintf("/%s/%s", subpath, v.Oid)
-
-	return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
+	return path
 }
 
 func (v *RequestVars) tusLink() string {
@@ -149,12 +150,13 @@ func (v *RequestVars) tusLink() string {
 
 func (v *RequestVars) VerifyLink() string {
 	path := ""
-	if len(v.User) > 0 {
+	if server, ok := Config[v.User]; ok {
 		path += fmt.Sprintf("/%s", v.User)
-	}
-	path += fmt.Sprintf("/verify/%s", v.Oid)
+		path += fmt.Sprintf("/verify/%s", v.Oid)
 
-	return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
+		path = fmt.Sprintf("%s://%s%s", server.Scheme, server.Host, path)
+	}
+	return path
 }
 
 // link provides a structure used to build a hypermedia representation of an HTTP link.
@@ -169,6 +171,7 @@ type App struct {
 	router       *mux.Router
 	contentStore *ContentStore
 	metaStore    *MetaStore
+	config       *Configuration
 	currentSize  int64
 	maximumSize  int64
 }
@@ -179,43 +182,55 @@ func FileSize(size int64) int64 {
 }
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
-func NewApp(content *ContentStore, meta *MetaStore) *App {
+func NewApp(content *ContentStore, meta *MetaStore, server string) *App {
+	c := newserver(server)
+
+	logger.Log(kv{"server": c.Server})
+
 	currentTotal, err := meta.Storage()
 	if err != nil {
 		return nil
 	}
-	msz, err := strconv.ParseInt(Config.Size, 10, 64)
+	msz, err := strconv.ParseInt(c.Size, 10, 64)
 	if err != nil {
 		return nil
 	}
 
-	app := &App{contentStore: content, metaStore: meta, currentSize: currentTotal, maximumSize: msz}
+	app := &App{contentStore: content, metaStore: meta, config: c, currentSize: currentTotal, maximumSize: msz}
 	r := mux.NewRouter()
 
-	ur := "/{user}/{repo}/"
-	r.HandleFunc(ur+"objects/batch", app.requireAuth(app.BatchHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	sp := "/" + server + "/"
+	ur := sp + "{repo}/"
+	app.HF(r, ur+"objects/batch", app.requireAuth(app.BatchHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 	route := ur + "objects/{oid}"
-	r.HandleFunc(route, app.requireAuth(app.GetContentHandler)).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
-	r.HandleFunc(route, app.requireAuth(app.GetMetaHandler)).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
-	r.HandleFunc(route, app.requireAuth(app.PutHandler)).Methods("PUT").MatcherFunc(ContentMatcher)
+	app.HF(r, route, app.requireAuth(app.GetContentHandler)).Methods("GET", "HEAD").MatcherFunc(ContentMatcher)
+	app.HF(r, route, app.requireAuth(app.GetMetaHandler)).Methods("GET", "HEAD").MatcherFunc(MetaMatcher)
+	app.HF(r, route, app.requireAuth(app.PutHandler)).Methods("PUT").MatcherFunc(ContentMatcher)
 
-	r.HandleFunc(ur+"objects", app.requireAuth(app.PostHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	app.HF(r, ur+"objects", app.requireAuth(app.PostHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 
 	route = ur + "locks"
-	r.HandleFunc(route, app.requireAuth(app.LocksHandler)).Methods("GET").MatcherFunc(MetaMatcher)
-	r.HandleFunc(route, app.requireAuth(app.CreateLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-	r.HandleFunc(route+"/verify", app.requireAuth(app.LocksVerifyHandler)).Methods("POST").MatcherFunc(MetaMatcher)
-	r.HandleFunc(route+"/{id}/unlock", app.requireAuth(app.DeleteLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	app.HF(r, route, app.requireAuth(app.LocksHandler)).Methods("GET").MatcherFunc(MetaMatcher)
+	app.HF(r, route, app.requireAuth(app.CreateLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	app.HF(r, route+"/verify", app.requireAuth(app.LocksVerifyHandler)).Methods("POST").MatcherFunc(MetaMatcher)
+	app.HF(r, route+"/{id}/unlock", app.requireAuth(app.DeleteLockHandler)).Methods("POST").MatcherFunc(MetaMatcher)
 
-	route = "/{user}/"
-	r.HandleFunc(route+"verify/{oid}", app.requireAuth(app.VerifyHandler)).Methods("POST")
-	r.HandleFunc(route+"size", app.requireAuth(app.CurrentSizeHandler)).Methods("POST")
+	route = sp
+	app.HF(r, route+"verify/{oid}", app.requireAuth(app.VerifyHandler)).Methods("POST")
+	app.HF(r, route+"size", app.requireAuth(app.CurrentSizeHandler)).Methods("POST")
 
 	app.addMgmt(r)
 
 	app.router = r
 
 	return app
+}
+
+func (a *App) HF(r *mux.Router, path string, f func(http.ResponseWriter,
+	*http.Request)) *mux.Route {
+	logger.Log(kv{"server": a.config.Server, "route": path})
+
+	return r.HandleFunc(path, f)
 }
 
 func (a *App) Append(size int64) bool {
@@ -323,7 +338,7 @@ func (a *App) BatchHandler(w http.ResponseWriter, r *http.Request) {
 	var responseObjects []*Representation
 
 	var useTus bool
-	if bv.Operation == "upload" && Config.IsUsingTus() {
+	if bv.Operation == "upload" && a.config.IsUsingTus() {
 		for _, t := range bv.Transfers {
 			if t == "tus" {
 				useTus = true
@@ -623,8 +638,10 @@ func (a *App) Represent(rv *RequestVars, meta *MetaObject, download, upload, use
 
 func (a *App) requireAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !Config.IsPublic() {
+		logger.Log(kv{"req": r})
+		if !a.config.IsPublic() {
 			user, password, _ := r.BasicAuth()
+			// logger.Log(kv{"user": user, "password": password})
 			if user, ret := a.metaStore.Authenticate(user, password); ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "dbg"))) {
 				w.Header().Set("WWW-Authenticate", "Basic realm=lfs")
 				writeStatus(w, r, 401)

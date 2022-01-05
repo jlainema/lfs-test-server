@@ -1,4 +1,4 @@
-module github.com/git-lfs/lfs-test-server
+module github.com/jlainema/lfs-test-server
 
 require (
 	github.com/GeertJohan/go.rice v0.0.0-20150223153050-b4a18af23143
@@ -7,6 +7,8 @@ require (
 	github.com/gorilla/context v0.0.0-20141217160251-215affda49ad
 	github.com/gorilla/mux v0.0.0-20140926153814-e444e69cbd2e
 	github.com/kardianos/osext v0.0.0-20150317202929-efacde031546 // indirect
+	github.com/radovskyb/watcher v1.0.7
+
 )
 
 go 1.11

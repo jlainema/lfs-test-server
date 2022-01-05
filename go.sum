@@ -10,3 +10,5 @@ github.com/gorilla/mux v0.0.0-20140926153814-e444e69cbd2e h1:nH09qCdJVZxw0nRVfm1
 github.com/gorilla/mux v0.0.0-20140926153814-e444e69cbd2e/go.mod h1:1lud6UwP+6orDFRuTfBEV8e9/aOM/c4fVVCaMa2zaAs=
 github.com/kardianos/osext v0.0.0-20150317202929-efacde031546 h1:ePuu22vwJOsd649X5+JBojWixIwf52QeREpSsykv7Q8=
 github.com/kardianos/osext v0.0.0-20150317202929-efacde031546/go.mod h1:1NbS8ALrpOvjt0rHPNLyCIeMtbizbir8U//inJ+zuB8=
+github.com/radovskyb/watcher v1.0.7 h1:AYePLih6dpmS32vlHfhCeli8127LzkIgwJGcwwe8tUE=
+github.com/radovskyb/watcher v1.0.7/go.mod h1:78okwvY5wPdzcb1UYnip1pvrZNIVEIh/Cm+ZuvsUYIg=

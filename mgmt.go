@@ -26,7 +26,7 @@ type pageData struct {
 }
 
 func (a *App) addMgmt(r *mux.Router) {
-	route := "/{user}/dbg"
+	route := "/" + a.config.Server + "/dbg"
 	r.HandleFunc(route, basicAuth(a.indexHandler)).Methods("GET")
 	r.HandleFunc(route+"/objects", basicAuth(a.objectsHandler)).Methods("GET")
 	r.HandleFunc(route+"/raw/{oid}", basicAuth(a.objectsRawHandler)).Methods("GET")
@@ -54,48 +54,31 @@ func cssHandler(w http.ResponseWriter, r *http.Request) {
 	f.Close()
 }
 
-func checkBasicAuth(user string, pass string, ok bool) int {
-	logger.Log(kv{"pass": pass, "user": user, "ok": ok})
-
-	if !ok {
-		return 0
-	}
-	if user != Config.Server {
-		return 0
-	}
-	if pass == Config.ReaderPass {
-		return 1
-	}
-	if pass == Config.AdminPass {
-		return 2
-	}
-	return 0
-}
-
 func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if Config.Server == "" || Config.AdminPass == "" {
-			writeStatus(w, r, 404)
-			return
-		}
-
 		user, pass, ok := r.BasicAuth()
+		// logger.Log(kv{"user": user, "pass": pass})
+		if server, found := Config[user]; found {
+			ret := server.checkBasicAuth(pass, ok)
 
-		ret := checkBasicAuth(user, pass, ok)
+			if ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "/dbg"))) {
+				w.Header().Set("WWW-Authenticate", "Basic realm=dbg")
+				writeStatus(w, r, 401)
+				return
+			}
 
-		if ret == 0 || (ret == 1 && (r.Method == "PUT" || strings.Contains(r.URL.Path, "/dbg"))) {
+			h(w, r)
+			logRequest(r, 200)
+		} else {
 			w.Header().Set("WWW-Authenticate", "Basic realm=dbg")
 			writeStatus(w, r, 401)
-			return
 		}
 
-		h(w, r)
-		logRequest(r, 200)
 	}
 }
 
 func (a *App) indexHandler(w http.ResponseWriter, r *http.Request) {
-	if err := render(w, "config.tmpl", pageData{Name: "index", Config: Config}); err != nil {
+	if err := render(w, "config.tmpl", pageData{Name: "index", Config: a.config}); err != nil {
 		writeStatus(w, r, 404)
 	}
 }
