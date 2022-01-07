@@ -110,6 +110,23 @@ type SizeResponse struct {
 	MaxSize int64 `json:"maxSize"`
 }
 
+type AllocatorResponse struct {
+	GBx2   int64 `json:"GBx2"`
+	GBx20  int64 `json:"GBx20"`
+	GBx60  int64 `json:"GBx60"`
+	GBx300 int64 `json:"GBx300"`
+	TBx1   int64 `json:"TBx1"`
+}
+
+type ConstructorResponse struct {
+	MaxSize   int64  `json:"maxSize"`
+	Port      int32  `json:"port"`
+	Server    string `json:"server,omitempty"`
+	WritePass string `json:"writePass,omitempty"`
+	ReadPass  string `json:"readPass,omitempty"`
+	Note      string `json:"note,omitempty"`
+}
+
 // DownloadLink builds a URL to download the object.
 func (v *RequestVars) DownloadLink() string {
 	return v.internalLink("objects")
@@ -218,6 +235,8 @@ func NewApp(content *ContentStore, meta *MetaStore, server string) *App {
 	route = sp
 	app.HF(r, route+"verify/{oid}", app.requireAuth(app.VerifyHandler)).Methods("POST")
 	app.HF(r, route+"size", app.requireAuth(app.CurrentSizeHandler)).Methods("POST")
+	app.HF(r, route+"sizes", app.requireAuth(app.AllocatorHandler)).Methods("POST")
+	app.HF(r, route+"new", app.requireAuth(app.ConstructorHandler)).Methods("PUT")
 
 	app.addMgmt(r)
 
@@ -432,6 +451,71 @@ func (a *App) CurrentSizeHandler(w http.ResponseWriter, r *http.Request) {
 		Size:    a.currentSize,
 		MaxSize: a.maximumSize,
 	})
+
+	logRequest(r, 200)
+}
+
+func (a *App) AllocatorHandler(w http.ResponseWriter, r *http.Request) {
+	enc := json.NewEncoder(w)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", metaMediaType)
+	free := a.maximumSize - a.currentSize
+	GB := int64(1000000000)
+	enc.Encode(&AllocatorResponse{
+		GBx2:   free / (2 * GB),
+		GBx20:  free / (20 * GB),
+		GBx60:  free / (60 * GB),
+		GBx300: free / (300 * GB),
+		TBx1:   free / (1000 * GB),
+	})
+	logRequest(r, 200)
+}
+
+func (a *App) ConstructorHandler(w http.ResponseWriter, r *http.Request) {
+	enc := json.NewEncoder(w)
+	dec := json.NewDecoder(r.Body)
+	w.Header().Set("Content-Type", metaMediaType)
+
+	rq := &ConstructorResponse{}
+	if err := dec.Decode(rq); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		rq.Note = "unable to decode"
+		enc.Encode(&rq)
+		return
+	}
+
+	free := a.maximumSize - a.currentSize
+	if free < rq.MaxSize {
+		w.WriteHeader(http.StatusBadRequest)
+		rq.Note = "out of memory"
+		enc.Encode(&rq)
+		return
+	}
+
+	oq := &RequestVars{Oid: rq.Server, Size: rq.MaxSize}
+	if _, err := a.metaStore.Put(oq); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		rq.Note = err.Error()
+		enc.Encode(&rq)
+		return
+	}
+	a.currentSize += rq.MaxSize
+
+	go newserver(rq.Server)
+
+	sleepms := time.Millisecond
+	for {
+		time.Sleep(sleepms)
+		if s, ok := Config[rq.Server]; ok && s.Up == "UP" {
+			rq.ReadPass = s.ReaderPass
+			rq.WritePass = s.AdminPass
+			if port, err := strconv.Atoi(s.Port); err != nil {
+				rq.Port = int32(port)
+			}
+			break
+		}
+		sleepms += time.Millisecond
+	}
 
 	logRequest(r, 200)
 }
