@@ -200,9 +200,9 @@ func FileSize(size int64) int64 {
 
 // NewApp creates a new App using the ContentStore and MetaStore provided
 func NewApp(content *ContentStore, meta *MetaStore, server string) *App {
-	c := newserver(server)
+	c := newserver(server, nil)
 
-	logger.Log(kv{"server": c.Server})
+	// logger.Log(kv{"server": c.Server})
 
 	currentTotal, err := meta.Storage()
 	if err != nil {
@@ -247,7 +247,7 @@ func NewApp(content *ContentStore, meta *MetaStore, server string) *App {
 
 func (a *App) HF(r *mux.Router, path string, f func(http.ResponseWriter,
 	*http.Request)) *mux.Route {
-	logger.Log(kv{"server": a.config.Server, "route": path})
+	// logger.Log(kv{"server": a.config.Server, "route": path})
 
 	return r.HandleFunc(path, f)
 }
@@ -501,20 +501,17 @@ func (a *App) ConstructorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	a.currentSize += rq.MaxSize
 
-	go newserver(rq.Server)
+	ch := make(chan string)
+	go newserver(rq.Server, ch)
 
-	sleepms := time.Millisecond
-	for {
-		time.Sleep(sleepms)
-		if s, ok := Config[rq.Server]; ok && s.Up == "UP" {
-			rq.ReadPass = s.ReaderPass
-			rq.WritePass = s.AdminPass
-			if port, err := strconv.Atoi(s.Port); err != nil {
-				rq.Port = int32(port)
-			}
-			break
+	if <-ch == "up" {
+		s := Config[rq.Server]
+		rq.ReadPass = s.ReaderPass
+		rq.WritePass = s.AdminPass
+		if port, err := strconv.Atoi(s.Port); err != nil {
+			rq.Port = int32(port)
 		}
-		sleepms += time.Millisecond
+		enc.Encode(&rq)
 	}
 
 	logRequest(r, 200)

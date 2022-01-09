@@ -32,7 +32,6 @@ type Configuration struct {
 	Public      string `config:"public"`
 	UseTus      string `config:"false"`
 	TusHost     string `config:"localhost:1080"`
-	Up          string `config:"down"`
 }
 
 func (c *Configuration) IsHTTPS() bool {
@@ -81,15 +80,25 @@ func rstr(count int) string {
 	}
 	dst := make([]byte, count)
 	for i, c := range rnd {
-		dst[i] = 'A' + (c & 63)
+		t := '*' + (c & 63)
+		if t >= '\\' {
+			t++
+		}
+		if t >= '`' {
+			t++
+		}
+		dst[i] = t
 	}
 	return string(dst)
 }
 
-func newserver(server string) *Configuration {
+func newserver(server string, ready chan string) *Configuration {
 	// check if server exists; if so, return it
 	s, ok := Config[server]
 	if ok {
+		if ready != nil {
+			ready <- "up"
+		}
 		return s
 	}
 	// does not exist; we are setting this one up
@@ -101,9 +110,21 @@ func newserver(server string) *Configuration {
 	// if it does not exist on disk, create folder for it (will launch on random port)
 	sd := "data/" + server
 	cfn := sd + "/.c"
-	if _, err := os.Stat(sd); os.IsNotExist(err) {
+
+	if file, err := os.Open(cfn); err == nil {
+		logger.Log(kv{"msg": "config exists", "name": cfn})
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			arr := strings.SplitN(scanner.Text(), "=", 2)
+			if len(arr) == 2 {
+				// logger.Log(kv{"name": arr[0], "value": arr[1]})
+				local[arr[0]] = arr[1]
+			}
+		}
+	} else {
 		if err := os.MkdirAll(sd, 0750); err != nil {
-			logger.Fatal(kv{"fn": "newserver", "err": "Could not create folder: " + err.Error()})
+			logger.Log(kv{"fn": "newserver", "err": "Could not create folder: " + err.Error()})
 			return s
 		}
 		local["LFS_PORT"] = "0"
@@ -114,18 +135,6 @@ func newserver(server string) *Configuration {
 		local["LFS_CONTENTPATH"] = sd
 		if host, err := os.Hostname(); err == nil {
 			local["LFS_HOST"] = host
-		}
-	}
-
-	if file, err := os.Open(cfn); err == nil {
-		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			arr := strings.SplitN(scanner.Text(), "=", 1)
-			if len(arr) == 2 {
-				logger.Log(kv{"name": arr[0], "value": arr[1]})
-				local[arr[0]] = arr[1]
-			}
 		}
 	}
 
@@ -144,10 +153,8 @@ func newserver(server string) *Configuration {
 			if env == "" {
 				env = sf.Tag.Get("config")
 			}
-			logger.Log(kv{"mode": "env", "name": envVar, "value": env})
-		} else {
-			logger.Log(kv{"mode": "local", "name": envVar, "value": env})
-		}
+			// logger.Log(kv{"mode": "env", "name": envVar, "value": env})
+		} // else { logger.Log(kv{"mode": "local", "name": envVar, "value": env}) }
 		field.SetString(env)
 	}
 
@@ -218,15 +225,15 @@ func newserver(server string) *Configuration {
 			envVar := strings.ToUpper(fmt.Sprintf("%s_%s", keyPrefix, name))
 			if _, err := w.WriteString(envVar + "=" + field.String() + "\n"); err != nil {
 				logger.Log(kv{"fn": "newserver", "var": envVar, "value": field.String(), "error": err})
-			} else {
-				logger.Log(kv{"fn": "newserver", "var": envVar, "value": field.String(), "ok": 1})
-			}
+			} //else { logger.Log(kv{"fn": "newserver", "var": envVar, "value": field.String(), "ok": 1}) }
 		}
 		w.Flush()
 	}
 
 	app := NewApp(contentStore, metaStore, server)
-	s.Up = "up"
+	if ready != nil {
+		ready <- "up"
+	}
 
 	if s.IsUsingTus() {
 		tusServer.Start(server)

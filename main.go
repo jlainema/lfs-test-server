@@ -71,10 +71,12 @@ func main() {
 		logger.Fatal(kv{"err": err})
 	}
 
+	ch := make(chan string)
 	for _, f := range files {
 		if f.IsDir() {
 			logger.Log(kv{"dir": f.Name()})
-			go newserver(f.Name())
+			go newserver(f.Name(), ch)
+			logger.Log(kv{"state": <-ch})
 		}
 	}
 
