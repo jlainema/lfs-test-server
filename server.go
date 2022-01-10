@@ -508,6 +508,7 @@ func (a *App) ConstructorHandler(w http.ResponseWriter, r *http.Request) {
 		s := Config[rq.Server]
 		rq.ReadPass = s.ReaderPass
 		rq.WritePass = s.AdminPass
+		rq.Note = strings.SplitN(s.Host, ":", 2)[0]
 		if port, err := strconv.Atoi(s.Port); err != nil {
 			rq.Port = int32(port)
 		}

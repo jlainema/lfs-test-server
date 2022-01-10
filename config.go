@@ -19,6 +19,7 @@ import (
 type Configuration struct {
 	Listen      string `config:"tcp://:"`
 	Host        string `config:"localhost"`
+	Contact     string `config:"1ntt.eu"`
 	Port        string `config:"0"`
 	MetaDB      string `config:".db"`
 	Size        string `config:"2000000000"`
@@ -233,6 +234,7 @@ func newserver(server string, ready chan string) *Configuration {
 	app := NewApp(contentStore, metaStore, server)
 	if ready != nil {
 		ready <- "up"
+		// also send I am up <with resources> to Contact if available
 	}
 
 	if s.IsUsingTus() {
