@@ -80,15 +80,9 @@ func rstr(count int) string {
 		panic("no random source: " + err.Error())
 	}
 	dst := make([]byte, count)
+	chars := "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-_"
 	for i, c := range rnd {
-		t := '*' + (c & 63)
-		if t >= '\\' {
-			t++
-		}
-		if t >= '`' {
-			t++
-		}
-		dst[i] = t
+		dst[i] = chars[(c & 63)]
 	}
 	return string(dst)
 }
