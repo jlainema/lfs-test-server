@@ -56,6 +56,7 @@ func cssHandler(w http.ResponseWriter, r *http.Request) {
 
 func basicAuth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Log(kv{"auth": r})
 		user, pass, ok := r.BasicAuth()
 		// logger.Log(kv{"user": user, "pass": pass})
 		if server, found := Config[user]; found {

@@ -247,7 +247,7 @@ func NewApp(content *ContentStore, meta *MetaStore, server string) *App {
 
 func (a *App) HF(r *mux.Router, path string, f func(http.ResponseWriter,
 	*http.Request)) *mux.Route {
-	// logger.Log(kv{"server": a.config.Server, "route": path})
+	logger.Log(kv{"server": a.config.Server, "route": path})
 
 	return r.HandleFunc(path, f)
 }
